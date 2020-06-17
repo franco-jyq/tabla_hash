@@ -1,7 +1,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "lista.h"
+#include "hash.h"
+#define TAMANIO_INICIAL 17 // tiene que ser un numero primo
 #include "pstdint.h" /* Replace with <stdint.h> if appropriate */
 #undef get16bits
 #if (defined(__GNUC__) && defined(__i386__)) || defined(__WATCOMC__) \
@@ -65,11 +68,27 @@ uint32_t SuperFastHash (const char * data, int len) {
     return hash;
 }
 
+/* *****************************************************************
+ *                   ESTRUCTURAS
+ * *****************************************************************/
 
-typedef struct elemento{
+
+typedef struct campo_hash{ // Le cambie el nombre, en la practica dijeron que le pongamos asi
 	void* dato;
 	char* clave;
-};
+} campo_hash_t;
+
+campo_hash_t* crear_campo (char* clave, void* dato){
+    campo_hash_t* elemento = malloc(sizeof(campo_hash_t));
+    if (!elemento) return NULL;
+    elemento->clave = clave; // No estoy seguro que esto funcione 
+    elemento->dato = dato;  // Esto tampoco estoy seguro
+    return elemento;
+}
+
+void destruir_campo (campo_hash_t* campo){ // Es medio al pedo pero si lo de arriba no funciona va a tener
+    free(campo);                            // mas sentido
+}
 
 
 struct hash{
@@ -77,38 +96,137 @@ struct hash{
     size_t cantidad;
     size_t tam;
     hash_destruir_dato_t destruir_dato;
-}
+};
+
+
 
 /* *****************************************************************
  *                    FUNCIONES Del TDA HASH
  * *****************************************************************/
 
 hash_t* hash_crear(hash_destruir_dato_t destruir_dato){
-	hash_t* hash = malloc(sizeof(hash_t*)); // pido espacio para el hash
-	if(!hash) return NULL;
-	hash->tam = 10;				//Iinicializo en 10? puse 10 por tirar un numero desp lo vemos
-	lista_t** arreglo_listas = malloc(sizeof(lista_t) * (hash->tam));	// aca pedi memoria para un arreglo
-	if(!arreglo_listas) return NULL; // si no c pudo devuelvo NULL
-	
-	for(int i; i < hash->tam; i++){
-		lista_t* arreglo_listas[i] = lista_crear();    //creo 1 lista (tam veces)
-		if(!arreglo_listas[i]) return NULL;   // si no se pudo crear lista devuelvo NULL
+	hash_t* hash = malloc(sizeof(hash_t));
+	if (!hash) return NULL;
+	hash->tam = TAMANIO_INICIAL;				
+	lista_t** arreglo_listas = malloc(sizeof(lista_t*) * (hash->tam));
+	if (!arreglo_listas){
+        free(hash);
+        return NULL;
+    } 
+	for (size_t i = 0; i < hash->tam; i++){
+		arreglo_listas[i] = lista_crear();    
+		if (!arreglo_listas[i]){
+            hash_destruir(hash);
+            return NULL;
+        }    
 	}
 
-	hash->lista = arreglo_listas		//guardo el arreglo de listas en hash->lista
-	hash->cantidad = 0;
-	hash->hash_destruir_dato = destruir_dato;
+	hash->lista = arreglo_listas;		
+    hash->cantidad = 0;
+	hash->destruir_dato = destruir_dato;
 	return hash;
 }
-	
+// Compara dos claves, creo que en string.h no hay una funcion equivalente
+bool comparar_claves (const char* clave1, const char* clave2){
+    for (size_t i = 0;i < strlen(clave1);i++){
+        if (clave1[i] != clave2[i]){
+            return false;
+        }        
+    }
+    if (strlen(clave1) == strlen(clave2)){
+        return true;
+    }
+    return false;
+}    
+
+
+
 bool hash_guardar(hash_t* hash, const char* clave, void* dato){
+    size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
+    bool repetida = false;
+    lista_iter_t* iter = lista_iter_crear(hash->lista[i]);
+    if (!iter) return false;
+    while(!lista_iter_al_final(iter)){
+        if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
+            ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato = dato;
+            repetida = true;    
+        }
+    }
+    lista_iter_destruir(iter);
+    if (repetida) return true;
+    campo_hash_t* nuevo_campo = crear_campo(clave,dato);
+    if (!nuevo_campo) return false;
+    if (!lista_insertar_primero(hash->lista[i],nuevo_campo)){
+        destruir_campo(nuevo_campo);
+        return false;
+    } 
+    return true;
+}
+// borrar,obtener y pertenece son lo mismo salvo 3 lineas de codigo
+void *hash_borrar(hash_t *hash, const char *clave){
+    size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
+    void* dato = NULL;
+    lista_iter_t* iter = lista_iter_crear(hash->lista[i]);
+    if (!iter) return NULL;
+    while(!lista_iter_al_final(iter)){
+        if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
+            dato = ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato;
+            hash->destruir_dato(((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato);
+            destruir_campo((campo_hash_t*)(lista_iter_ver_actual(iter)));        
+        }
+    }
+    lista_iter_destruir(iter);
+    return dato;
+}
 
 
-}																																																																	
+void *hash_obtener(const hash_t *hash, const char *clave){
+    size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
+    void* dato = NULL;
+    lista_iter_t* iter = lista_iter_crear(hash->lista[i]);
+    if (!iter) return NULL;
+    while(!lista_iter_al_final(iter)){
+        if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
+            dato = ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato;        
+        }
+    }
+    lista_iter_destruir(iter);
+    return dato;
+}
+
+bool hash_pertenece(const hash_t *hash, const char *clave){
+    size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
+    bool pertenece = false;
+    lista_iter_t* iter = lista_iter_crear(hash->lista[i]);
+    if (!iter) return false;
+    while(!lista_iter_al_final(iter)){
+        if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
+            pertenece = true;        
+        }
+    }
+    lista_iter_destruir(iter);
+    return pertenece;
+}
+
+size_t hash_cantidad(const hash_t *hash){
+    return hash->cantidad;
+}
+
+void hash_destruir(hash_t *hash){
+    for (size_t i = 0;i < hash->tam;i++){
+        while (!lista_esta_vacia(hash->lista[i])){ 
+            hash->destruir_dato(((campo_hash_t*)lista_ver_primero(hash->lista[i]))->dato);
+            destruir_campo((campo_hash_t*)(lista_borrar_primero(hash->lista[i])));
+        }
+        lista_destruir(hash->lista[i],NULL);
+    }
+    free(hash->lista);
+    free(hash);
+}
 
 
 
 
 
-struct hash_iter;
+
 
