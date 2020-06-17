@@ -75,19 +75,19 @@ uint32_t SuperFastHash (const char * data, int len) {
 
 typedef struct campo_hash{ // Le cambie el nombre, en la practica dijeron que le pongamos asi
 	void* dato;
-	char* clave;
+	const char* clave; //  --  tuve q agregar const por la misma razon del warning de abajo
 } campo_hash_t;
 
-campo_hash_t* crear_campo (char* clave, void* dato){
+campo_hash_t* crear_campo (const char* clave, void* dato){ // -- tuve q agregar const por un warning 
     campo_hash_t* elemento = malloc(sizeof(campo_hash_t));
     if (!elemento) return NULL;
-    elemento->clave = clave; // No estoy seguro que esto funcione 
-    elemento->dato = dato;  // Esto tampoco estoy seguro
+    elemento->clave = clave; // No estoy seguro que esto funcione -- para mi esta perfecto 
+    elemento->dato = dato;  // Esto tampoco estoy seguro -- idem arriba
     return elemento;
 }
 
 void destruir_campo (campo_hash_t* campo){ // Es medio al pedo pero si lo de arriba no funciona va a tener
-    free(campo);                            // mas sentido
+    free(campo);                            // mas sentido -- yo hice algo parecido en el dc
 }
 
 
@@ -126,8 +126,12 @@ hash_t* hash_crear(hash_destruir_dato_t destruir_dato){
 	hash->destruir_dato = destruir_dato;
 	return hash;
 }
-// Compara dos claves, creo que en string.h no hay una funcion equivalente
+// Compara dos claves, creo que en string.h no hay una funcion equivalente -- si solo qeremos saber si son iguales creo q nos sirve strcmp()
 bool comparar_claves (const char* clave1, const char* clave2){
+    /* qedaria algo asi:
+    if(strcmp(clave1, clave2) == 0) return true;
+    return false;
+    */
     for (size_t i = 0;i < strlen(clave1);i++){
         if (clave1[i] != clave2[i]){
             return false;
@@ -154,7 +158,7 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
     }
     lista_iter_destruir(iter);
     if (repetida) return true;
-    campo_hash_t* nuevo_campo = crear_campo(clave,dato);
+    campo_hash_t* nuevo_campo = crear_campo(clave, dato);
     if (!nuevo_campo) return false;
     if (!lista_insertar_primero(hash->lista[i],nuevo_campo)){
         destruir_campo(nuevo_campo);
@@ -224,8 +228,28 @@ void hash_destruir(hash_t *hash){
     free(hash);
 }
 
+hash_iter_t *hash_iter_crear(const hash_t *hash){
+    return NULL;
+}
 
 
+bool hash_iter_avanzar(hash_iter_t *iter){    
+    return false;
+}
+
+const char* hash_iter_ver_actual(const hash_iter_t *iter){
+    return NULL;    
+}
+
+
+bool hash_iter_al_final(const hash_iter_t *iter){
+    return false;
+}
+
+
+void hash_iter_destruir(hash_iter_t* iter){
+
+}
 
 
 
