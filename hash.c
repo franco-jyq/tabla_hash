@@ -167,7 +167,7 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
     return true;
 }
 // borrar,obtener y pertenece son lo mismo salvo 3 lineas de codigo
-void *hash_borrar(hash_t *hash, const char *clave){
+void* hash_borrar(hash_t *hash, const char *clave){
     size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
     void* dato = NULL;
     lista_iter_t* iter = lista_iter_crear(hash->lista[i]);
@@ -184,7 +184,7 @@ void *hash_borrar(hash_t *hash, const char *clave){
 }
 
 
-void *hash_obtener(const hash_t *hash, const char *clave){
+void* hash_obtener(const hash_t *hash, const char *clave){
     size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
     void* dato = NULL;
     lista_iter_t* iter = lista_iter_crear(hash->lista[i]);
@@ -228,27 +228,57 @@ void hash_destruir(hash_t *hash){
     free(hash);
 }
 
-hash_iter_t *hash_iter_crear(const hash_t *hash){
-    return NULL;
+/* *****************************************************************
+ *                    FUNCIONES Del Iter Hash
+ * *****************************************************************/
+
+
+typedef struct hash_iter{
+    lista_iter_t* lista_iter;    
+    hash_t* hash;
+    size_t cont;
+}
+
+
+hash_iter_t* hash_iter_crear(const hash_t *hash){
+    hash_iter_t* hash_iter = malloc(sizeof(hash_iter_t));
+    if(!hash_iter) return NULL;
+    lista_iter_t* lista_iter =  lista_iter_crear(hash->lista[0]);
+    if(!lista_iter) return NULL;
+    hash_iter->lista_iter = lista_iter;
+    hash_iter->hash = hash;
+    hash_iter->cont = 0;
+    return hash_iter;
 }
 
 
 bool hash_iter_avanzar(hash_iter_t *iter){    
-    return false;
+    if(hash_iter_al_final(iter))return false;
+    
+    if(lista_iter_al_final(iter->lista_iter)){
+        lista_iter_destruir(iter->lista_iter);
+        iter->cont ++;  
+        lista_iter_t* nuevo_lista_iter = lista_iter_crear(iter->hash->lista[iter->cont]);
+        iter->lista_iter = nuevo_lista_iter;     
+    }
+    
+    lista_iter_avanzar(iter->lista_iter);
+    return true;
 }
 
 const char* hash_iter_ver_actual(const hash_iter_t *iter){
-    return NULL;    
+    return lista_iter_ver_actual(iter->lista_iter);    
 }
 
 
 bool hash_iter_al_final(const hash_iter_t *iter){
-    return false;
+    return (iter->cont == iter->hash->tam);
 }
 
 
 void hash_iter_destruir(hash_iter_t* iter){
-
+    lista_iter_destruir(iter->lista_iter);
+    free(iter);
 }
 
 
