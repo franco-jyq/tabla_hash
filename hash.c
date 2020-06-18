@@ -243,11 +243,15 @@ struct hash_iter{
 hash_iter_t* hash_iter_crear(const hash_t *hash){
     hash_iter_t* hash_iter = malloc(sizeof(hash_iter_t));
     if(!hash_iter) return NULL;
-    lista_iter_t* lista_iter =  lista_iter_crear(hash->lista[0]);
+    hash_iter->cont = 0;
+    while (lista_esta_vacia(hash->lista[hash_iter->cont]) && hash_iter->cont < hash->tam-1){
+        hash_iter->cont++;
+    }
+    lista_iter_t* lista_iter =  lista_iter_crear(hash->lista[hash_iter->cont]);
     if(!lista_iter) return NULL;
+    if (!lista_iter_al_final(lista_iter)) hash_iter->cont++;
     hash_iter->lista_iter = lista_iter;
     hash_iter->hash = hash;
-    hash_iter->cont = 0;
     return hash_iter;
 }
 
@@ -256,11 +260,17 @@ bool hash_iter_avanzar(hash_iter_t *iter){
     if(hash_iter_al_final(iter))return false;
     
     if(lista_iter_al_final(iter->lista_iter)){
+        iter->cont++; 
+        while(iter->cont < iter->hash->tam && lista_esta_vacia(iter->hash->lista[iter->cont])){
+            iter->cont ++;    
+        }        
         lista_iter_destruir(iter->lista_iter);
-        iter->cont ++;  
-        lista_iter_t* nuevo_lista_iter = lista_iter_crear(iter->hash->lista[iter->cont]);
-        if (!nuevo_lista_iter) return false; // faltaba esto creo
-        iter->lista_iter = nuevo_lista_iter;     
+        if (!hash_iter_al_final(iter)){ 
+            lista_iter_t* nuevo_lista_iter = lista_iter_crear(iter->hash->lista[iter->cont]);
+            if (!nuevo_lista_iter) return false;
+            iter->lista_iter = nuevo_lista_iter;
+        }       
+        return true;     
     }
     
     lista_iter_avanzar(iter->lista_iter);
