@@ -73,7 +73,7 @@ uint32_t SuperFastHash (const char * data, int len) {
  * *****************************************************************/
 
 
-typedef struct campo_hash{ // Le cambie el nombre, en la practica dijeron que le pongamos asi
+typedef struct campo_hash{
 	void* dato;
 	const char* clave; //  --  tuve q agregar const por la misma razon del warning de abajo
 } campo_hash_t;
@@ -81,13 +81,13 @@ typedef struct campo_hash{ // Le cambie el nombre, en la practica dijeron que le
 campo_hash_t* crear_campo (const char* clave, void* dato){ // -- tuve q agregar const por un warning 
     campo_hash_t* elemento = malloc(sizeof(campo_hash_t));
     if (!elemento) return NULL;
-    elemento->clave = clave; // No estoy seguro que esto funcione -- para mi esta perfecto 
-    elemento->dato = dato;  // Esto tampoco estoy seguro -- idem arriba
+    elemento->clave = clave;  
+    elemento->dato = dato;  
     return elemento;
 }
 
-void destruir_campo (campo_hash_t* campo){ // Es medio al pedo pero si lo de arriba no funciona va a tener
-    free(campo);                            // mas sentido -- yo hice algo parecido en el dc
+void destruir_campo (campo_hash_t* campo){ 
+    free(campo);                            
 }
 
 
@@ -233,11 +233,11 @@ void hash_destruir(hash_t *hash){
  * *****************************************************************/
 
 
-typedef struct hash_iter{
+struct hash_iter{
     lista_iter_t* lista_iter;    
     hash_t* hash;
     size_t cont;
-}
+};
 
 
 hash_iter_t* hash_iter_crear(const hash_t *hash){
@@ -259,6 +259,7 @@ bool hash_iter_avanzar(hash_iter_t *iter){
         lista_iter_destruir(iter->lista_iter);
         iter->cont ++;  
         lista_iter_t* nuevo_lista_iter = lista_iter_crear(iter->hash->lista[iter->cont]);
+        if (!nuevo_lista_iter) return false; // faltaba esto creo
         iter->lista_iter = nuevo_lista_iter;     
     }
     
@@ -267,7 +268,7 @@ bool hash_iter_avanzar(hash_iter_t *iter){
 }
 
 const char* hash_iter_ver_actual(const hash_iter_t *iter){
-    return lista_iter_ver_actual(iter->lista_iter);    
+    return lista_iter_ver_actual(iter->lista_iter);        // no estaria devolviendo todo el campo aca?
 }
 
 
