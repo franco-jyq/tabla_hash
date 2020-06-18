@@ -235,7 +235,7 @@ void hash_destruir(hash_t *hash){
 
 struct hash_iter{
     lista_iter_t* lista_iter;    
-    hash_t* hash;
+    const hash_t* hash;
     size_t cont;
 };
 
@@ -268,7 +268,8 @@ bool hash_iter_avanzar(hash_iter_t *iter){
 }
 
 const char* hash_iter_ver_actual(const hash_iter_t *iter){
-    return lista_iter_ver_actual(iter->lista_iter);        // no estaria devolviendo todo el campo aca?
+        
+    return ((campo_hash_t*)(lista_iter_ver_actual(iter->lista_iter)))->clave;        // no estaria devolviendo todo el campo aca?
 }
 
 
