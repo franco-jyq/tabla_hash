@@ -164,9 +164,7 @@ bool hash_redimensionar(hash_t* hash){ // no puede ser un const porque se modifi
 bool comparar_claves (const char* clave1, const char* clave2){
     if(strcmp(clave1, clave2) == 0) return true;
     return false;
-}    
-
-
+}
 
 bool hash_guardar(hash_t* hash, const char* clave, void* dato){
     size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
@@ -176,6 +174,9 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
     if (!iter) return false;
     while(!lista_iter_al_final(iter)){
         if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
+            if (hash->destruir_dato){ 
+                hash->destruir_dato(((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato);
+            }
             ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato = dato;
             repetida = true;    
         }
@@ -219,7 +220,6 @@ void* hash_borrar(hash_t *hash, const char *clave){
     return dato;
 }
 
-
 void* hash_obtener(const hash_t *hash, const char *clave){
     size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
     void* dato = NULL;
@@ -257,8 +257,8 @@ size_t hash_cantidad(const hash_t *hash){
 void hash_destruir(hash_t *hash){
     for (size_t i = 0; i < hash->tam; i++){
         while (!lista_esta_vacia(hash->lista[i])){ 
-            if(hash->destruir_dato){  
-                hash->destruir_dato(((campo_hash_t*)lista_ver_primero(hash->lista[i]))->dato);
+            if (hash->destruir_dato){ 
+                hash->destruir_dato(((campo_hash_t*)lista_ver_primero(hash->lista[i]))->dato);                
             }
             destruir_campo((campo_hash_t*)(lista_borrar_primero(hash->lista[i])));
         }
@@ -280,7 +280,6 @@ struct hash_iter{
     size_t cont;
 };
 
-
 hash_iter_t* hash_iter_crear(const hash_t *hash){
     hash_iter_t* hash_iter = malloc(sizeof(hash_iter_t));
     if(!hash_iter) return NULL;
@@ -290,35 +289,29 @@ hash_iter_t* hash_iter_crear(const hash_t *hash){
     }
     lista_iter_t* lista_iter =  lista_iter_crear(hash->lista[hash_iter->cont]);
     if(!lista_iter) return NULL;
-//    if (!lista_iter_al_final(lista_iter)) hash_iter->cont++;
     hash_iter->lista_iter = lista_iter;
     hash_iter->hash = hash;
     hash_iter->iterados = 0;
     return hash_iter;
 }
 
-
 bool hash_iter_avanzar(hash_iter_t *iter){    
     if(hash_iter_al_final(iter))return false;
-    
+    lista_iter_avanzar(iter->lista_iter);
+    iter->iterados ++;
     if(lista_iter_al_final(iter->lista_iter)){
         iter->cont++; 
         while(iter->cont < iter->hash->tam-1 && lista_esta_vacia(iter->hash->lista[iter->cont])){
             iter->cont ++;    
         }        
         lista_iter_destruir(iter->lista_iter);
+        iter->lista_iter = NULL;
         if (!hash_iter_al_final(iter)){ 
             lista_iter_t* nuevo_lista_iter = lista_iter_crear(iter->hash->lista[iter->cont]);
             if (!nuevo_lista_iter) return false;
             iter->lista_iter = nuevo_lista_iter;
-        }
-        iter->iterados ++;       
-        return true;     
+        }                             
     }
-    
-    
-    lista_iter_avanzar(iter->lista_iter);
-    iter->iterados ++;
     return true;
 }
 
@@ -332,9 +325,8 @@ bool hash_iter_al_final(const hash_iter_t *iter){
     return (iter->iterados == iter->hash->cantidad);
 }
 
-
 void hash_iter_destruir(hash_iter_t* iter){
-    lista_iter_destruir(iter->lista_iter);
+    if (iter->lista_iter) lista_iter_destruir(iter->lista_iter);    
     free(iter);
 }
 
