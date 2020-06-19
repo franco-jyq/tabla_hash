@@ -290,10 +290,10 @@ hash_iter_t* hash_iter_crear(const hash_t *hash){
     }
     lista_iter_t* lista_iter =  lista_iter_crear(hash->lista[hash_iter->cont]);
     if(!lista_iter) return NULL;
-    if (!lista_iter_al_final(lista_iter)) hash_iter->cont++;
+//    if (!lista_iter_al_final(lista_iter)) hash_iter->cont++;
     hash_iter->lista_iter = lista_iter;
     hash_iter->hash = hash;
-    hash_iter->iterados = 1;
+    hash_iter->iterados = 0;
     return hash_iter;
 }
 
@@ -303,7 +303,7 @@ bool hash_iter_avanzar(hash_iter_t *iter){
     
     if(lista_iter_al_final(iter->lista_iter)){
         iter->cont++; 
-        while(iter->cont < iter->hash->tam && lista_esta_vacia(iter->hash->lista[iter->cont])){
+        while(iter->cont < iter->hash->tam-1 && lista_esta_vacia(iter->hash->lista[iter->cont])){
             iter->cont ++;    
         }        
         lista_iter_destruir(iter->lista_iter);
@@ -312,9 +312,10 @@ bool hash_iter_avanzar(hash_iter_t *iter){
             if (!nuevo_lista_iter) return false;
             iter->lista_iter = nuevo_lista_iter;
         }
-        //iter->iterados ++;       
+        iter->iterados ++;       
         return true;     
     }
+    
     
     lista_iter_avanzar(iter->lista_iter);
     iter->iterados ++;
@@ -324,12 +325,11 @@ bool hash_iter_avanzar(hash_iter_t *iter){
 const char* hash_iter_ver_actual(const hash_iter_t *iter){
     if(hash_iter_al_final(iter))return NULL;
     return ((campo_hash_t*)(lista_iter_ver_actual(iter->lista_iter)))->clave;    
-    
 }
 
 
 bool hash_iter_al_final(const hash_iter_t *iter){
-    return (iter->iterados > iter->hash->cantidad);
+    return (iter->iterados == iter->hash->cantidad);
 }
 
 
