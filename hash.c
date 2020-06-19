@@ -5,7 +5,7 @@
 #include "lista.h"
 #include "hash.h"
 #define CONSTANTE_DE_REDIMENSION 2
-#define TAMANIO_INICIAL 17 // tiene que ser un numero primo
+#define TAMANIO_INICIAL 37 // tiene que ser un numero primo
 #include "pstdint.h" /* Replace with <stdint.h> if appropriate */
 #undef get16bits
 #if (defined(__GNUC__) && defined(__i386__)) || defined(__WATCOMC__) \
@@ -76,18 +76,19 @@ uint32_t SuperFastHash (const char * data, int len) {
 
 typedef struct campo_hash{
 	void* dato;
-	const char* clave; //  --  tuve q agregar const por la misma razon del warning de abajo
+	char* clave; 
 } campo_hash_t;
 
-campo_hash_t* crear_campo (const char* clave, void* dato){ // -- tuve q agregar const por un warning 
-    campo_hash_t* elemento = malloc(sizeof(campo_hash_t));
-    if (!elemento) return NULL;
-    elemento->clave = clave;  
-    elemento->dato = dato;  
-    return elemento;
+campo_hash_t* crear_campo (char* clave, void* dato){ 
+    campo_hash_t* campo = malloc(sizeof(campo_hash_t));
+    if (!campo) return NULL;
+    campo->clave = clave;  
+    campo->dato = dato;  
+    return campo;
 }
 
-void destruir_campo (campo_hash_t* campo){ 
+void destruir_campo (campo_hash_t* campo){
+    free(campo->clave); 
     free(campo);                            
 }
 
@@ -128,28 +129,29 @@ hash_t* hash_crear(hash_destruir_dato_t destruir_dato){
 	return hash;
 }
 /*
-bool hash_redimensionar(const hash_t* hash){
-    int factor_carga = hash->cantidad / hash->tam;
-    if(factor_carga < 3 && factor_carga > 2) return true;
+bool hash_redimensionar(hash_t* hash){ // no puede ser un const porque se modifica
+    size_t factor_carga = hash->cantidad / hash->tam;
+    if(factor_carga < 3 && factor_carga > 2 && hash->tam > TAMANIO_INICIAL) return true; // tiene que tener un tamaniom minimo
     size_t nuevo_tam;
     if(factor_carga > 3) nuevo_tam = hash->tam * CONSTANTE_DE_REDIMENSION;
     if(factor_carga < 2) nuevo_tam = hash->tam / CONSTANTE_DE_REDIMENSION;
-    lista_t** nueva_tabla = malloc(sizeof(nuevo_tam));
+    lista_t** nueva_tabla = malloc(sizeof(lista_t*)*nuevo_tam);
     if(!nueva_tabla) return NULL;
     for (size_t i = 0; i < nuevo_tam; i++){
         nueva_tabla[i] = lista_crear();
-        if (!nueva_tabla[i]) return false;
+        if (!nueva_tabla[i]) return false; // aca habria que destruir la memoria de nueva tabla y las otras listas
     }
     hash_iter_t* iter = hash_iter_crear(hash);
-    if(!iter) return NULL;
+    if(!iter) return NULL;                    // aca tambien, creo que podriamos usar una funcion auxiliar
     while(!hash_iter_al_final(iter)){
-        //hash_iter_t* hash_iter = hash
-        const char* clave = (campo_hash_t*)(hash_iter_ver_actual(iter))->clave;
-        void* dato = (campo_hash_t*)(hash_iter_ver_actual(iter))->dato;
+        const char* clave = (hash_iter_ver_actual(iter));
+        void* dato = hash_obtener(hash,clave);
+        campo_hash_t* nuevo_campo = crear_campo(clave, dato);
+        if (!nuevo_campo) return false;       // aca tambien
         size_t i  = SuperFastHash( clave, strlen(clave)) % nuevo_tam;
-        lista_insertar_primero(nueva_tabla[i]);
+        if(!lista_insertar_primero(nueva_tabla[i],nuevo_campo)); //aca lamentablemente tambien
         hash_borrar(hash, clave);
-        hash_iter_avanzar(hash);
+        hash_iter_avanzar(iter);
     }
     hash_iter_destruir(iter);
     hash->lista = nueva_tabla;
@@ -158,7 +160,7 @@ bool hash_redimensionar(const hash_t* hash){
 }
 */
 
-// Compara dos claves, creo que en string.h no hay una funcion equivalente -- si solo qeremos saber si son iguales creo q nos sirve strcmp()
+
 bool comparar_claves (const char* clave1, const char* clave2){
     if(strcmp(clave1, clave2) == 0) return true;
     return false;
@@ -177,21 +179,24 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
             ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato = dato;
             repetida = true;    
         }
-        lista_iter_avanzar(iter); // faltaba avanzar en cada iteracion
+        lista_iter_avanzar(iter); 
     }
     lista_iter_destruir(iter);
     if (repetida) return true;
-    campo_hash_t* nuevo_campo = crear_campo(clave, dato);
+    char* copia_clave = malloc(sizeof(char)*(strlen(clave)+1));
+    if (!copia_clave) return false;
+    strcpy(copia_clave,clave);
+    campo_hash_t* nuevo_campo = crear_campo(copia_clave, dato);
     if (!nuevo_campo) return false;
     if (!lista_insertar_primero(hash->lista[i],nuevo_campo)){
         destruir_campo(nuevo_campo);
         return false;
     } 
-    hash->cantidad ++; //faltaba actualizar la cantidad
-    //hash_redimensionar(hash);
+    hash->cantidad ++; 
+//    hash_redimensionar(hash);
     return true;
 }
-// borrar,obtener y pertenece son lo mismo salvo 3 lineas de codigo
+
 void* hash_borrar(hash_t *hash, const char *clave){
     size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
     void* dato = NULL;
@@ -200,16 +205,17 @@ void* hash_borrar(hash_t *hash, const char *clave){
     while(!lista_iter_al_final(iter)){
         if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
             dato = ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato;
-            if(hash->destruir_dato){ // tuve q poner este if por si destruir dato es NULL
+            if(hash->destruir_dato){ 
                 hash->destruir_dato(((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato);
             }
             destruir_campo((campo_hash_t*)(lista_iter_ver_actual(iter)));        
-            lista_iter_borrar(iter); // faltaba borrar el elemento de lalista
+            lista_iter_borrar(iter); 
             hash->cantidad --;
         }
-        lista_iter_avanzar(iter); // falataba avanzar en cada iteracion
+        lista_iter_avanzar(iter); 
     }    
     lista_iter_destruir(iter);
+//    hash_redimensionar(hash);
     return dato;
 }
 
@@ -223,7 +229,7 @@ void* hash_obtener(const hash_t *hash, const char *clave){
         if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
             dato = ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato;        
         }
-        lista_iter_avanzar(iter);   // falataba el avanzar
+        lista_iter_avanzar(iter);   
     }
     lista_iter_destruir(iter);
     return dato;
@@ -238,7 +244,7 @@ bool hash_pertenece(const hash_t *hash, const char *clave){
         if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
             pertenece = true;        
         }
-        lista_iter_avanzar(iter); //falataba el avanzar
+        lista_iter_avanzar(iter); 
     }
     lista_iter_destruir(iter);
     return pertenece;
@@ -251,7 +257,7 @@ size_t hash_cantidad(const hash_t *hash){
 void hash_destruir(hash_t *hash){
     for (size_t i = 0; i < hash->tam; i++){
         while (!lista_esta_vacia(hash->lista[i])){ 
-            if(hash->destruir_dato){  // tuve q poner este if por si destruir dato es NULL
+            if(hash->destruir_dato){  
                 hash->destruir_dato(((campo_hash_t*)lista_ver_primero(hash->lista[i]))->dato);
             }
             destruir_campo((campo_hash_t*)(lista_borrar_primero(hash->lista[i])));
