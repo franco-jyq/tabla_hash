@@ -4,6 +4,7 @@
 #include <string.h>
 #include "lista.h"
 #include "hash.h"
+#define CONSTANTE_DE_REDIMENSION 2
 #define TAMANIO_INICIAL 17 // tiene que ser un numero primo
 #include "pstdint.h" /* Replace with <stdint.h> if appropriate */
 #undef get16bits
@@ -126,20 +127,40 @@ hash_t* hash_crear(hash_destruir_dato_t destruir_dato){
 	hash->destruir_dato = destruir_dato;
 	return hash;
 }
+/*
+bool hash_redimensionar(const hash_t* hash){
+    int factor_carga = hash->cantidad / hash->tam;
+    if(factor_carga < 3 && factor_carga > 2) return true;
+    size_t nuevo_tam;
+    if(factor_carga > 3) nuevo_tam = hash->tam * CONSTANTE_DE_REDIMENSION;
+    if(factor_carga < 2) nuevo_tam = hash->tam / CONSTANTE_DE_REDIMENSION;
+    lista_t** nueva_tabla = malloc(sizeof(nuevo_tam));
+    if(!nueva_tabla) return NULL;
+    for (size_t i = 0; i < nuevo_tam; i++){
+        nueva_tabla[i] = lista_crear();
+        if (!nueva_tabla[i]) return false;
+    }
+    hash_iter_t* iter = hash_iter_crear(hash);
+    if(!iter) return NULL;
+    while(!hash_iter_al_final(iter)){
+        //hash_iter_t* hash_iter = hash
+        const char* clave = (campo_hash_t*)(hash_iter_ver_actual(iter))->clave;
+        void* dato = (campo_hash_t*)(hash_iter_ver_actual(iter))->dato;
+        size_t i  = SuperFastHash( clave, strlen(clave)) % nuevo_tam;
+        lista_insertar_primero(nueva_tabla[i]);
+        hash_borrar(hash, clave);
+        hash_iter_avanzar(hash);
+    }
+    hash_iter_destruir(iter);
+    hash->lista = nueva_tabla;
+    hash->tam = nuevo_tam;
+    return true;
+}
+*/
+
 // Compara dos claves, creo que en string.h no hay una funcion equivalente -- si solo qeremos saber si son iguales creo q nos sirve strcmp()
 bool comparar_claves (const char* clave1, const char* clave2){
-    /* qedaria algo asi:
     if(strcmp(clave1, clave2) == 0) return true;
-    return false;
-    */
-    for (size_t i = 0;i < strlen(clave1);i++){
-        if (clave1[i] != clave2[i]){
-            return false;
-        }        
-    }
-    if (strlen(clave1) == strlen(clave2)){
-        return true;
-    }
     return false;
 }    
 
@@ -148,6 +169,7 @@ bool comparar_claves (const char* clave1, const char* clave2){
 bool hash_guardar(hash_t* hash, const char* clave, void* dato){
     size_t i = SuperFastHash(clave, strlen(clave)) % hash->tam;
     bool repetida = false;
+
     lista_iter_t* iter = lista_iter_crear(hash->lista[i]);
     if (!iter) return false;
     while(!lista_iter_al_final(iter)){
@@ -155,6 +177,7 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
             ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato = dato;
             repetida = true;    
         }
+        lista_iter_avanzar(iter); // faltaba avanzar en cada iteracion
     }
     lista_iter_destruir(iter);
     if (repetida) return true;
@@ -164,6 +187,8 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
         destruir_campo(nuevo_campo);
         return false;
     } 
+    hash->cantidad ++; //faltaba actualizar la cantidad
+    //hash_redimensionar(hash);
     return true;
 }
 // borrar,obtener y pertenece son lo mismo salvo 3 lineas de codigo
@@ -175,10 +200,15 @@ void* hash_borrar(hash_t *hash, const char *clave){
     while(!lista_iter_al_final(iter)){
         if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
             dato = ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato;
-            hash->destruir_dato(((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato);
+            if(hash->destruir_dato){ // tuve q poner este if por si destruir dato es NULL
+                hash->destruir_dato(((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato);
+            }
             destruir_campo((campo_hash_t*)(lista_iter_ver_actual(iter)));        
+            lista_iter_borrar(iter); // faltaba borrar el elemento de lalista
+            hash->cantidad --;
         }
-    }
+        lista_iter_avanzar(iter); // falataba avanzar en cada iteracion
+    }    
     lista_iter_destruir(iter);
     return dato;
 }
@@ -193,6 +223,7 @@ void* hash_obtener(const hash_t *hash, const char *clave){
         if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
             dato = ((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato;        
         }
+        lista_iter_avanzar(iter);   // falataba el avanzar
     }
     lista_iter_destruir(iter);
     return dato;
@@ -207,6 +238,7 @@ bool hash_pertenece(const hash_t *hash, const char *clave){
         if (comparar_claves(((campo_hash_t*)(lista_iter_ver_actual(iter)))->clave,clave)){
             pertenece = true;        
         }
+        lista_iter_avanzar(iter); //falataba el avanzar
     }
     lista_iter_destruir(iter);
     return pertenece;
@@ -217,9 +249,11 @@ size_t hash_cantidad(const hash_t *hash){
 }
 
 void hash_destruir(hash_t *hash){
-    for (size_t i = 0;i < hash->tam;i++){
+    for (size_t i = 0; i < hash->tam; i++){
         while (!lista_esta_vacia(hash->lista[i])){ 
-            hash->destruir_dato(((campo_hash_t*)lista_ver_primero(hash->lista[i]))->dato);
+            if(hash->destruir_dato){  // tuve q poner este if por si destruir dato es NULL
+                hash->destruir_dato(((campo_hash_t*)lista_ver_primero(hash->lista[i]))->dato);
+            }
             destruir_campo((campo_hash_t*)(lista_borrar_primero(hash->lista[i])));
         }
         lista_destruir(hash->lista[i],NULL);
@@ -236,6 +270,7 @@ void hash_destruir(hash_t *hash){
 struct hash_iter{
     lista_iter_t* lista_iter;    
     const hash_t* hash;
+    size_t iterados;
     size_t cont;
 };
 
@@ -252,6 +287,7 @@ hash_iter_t* hash_iter_crear(const hash_t *hash){
     if (!lista_iter_al_final(lista_iter)) hash_iter->cont++;
     hash_iter->lista_iter = lista_iter;
     hash_iter->hash = hash;
+    hash_iter->iterados = 1;
     return hash_iter;
 }
 
@@ -269,22 +305,25 @@ bool hash_iter_avanzar(hash_iter_t *iter){
             lista_iter_t* nuevo_lista_iter = lista_iter_crear(iter->hash->lista[iter->cont]);
             if (!nuevo_lista_iter) return false;
             iter->lista_iter = nuevo_lista_iter;
-        }       
+        }
+        //iter->iterados ++;       
         return true;     
     }
     
     lista_iter_avanzar(iter->lista_iter);
+    iter->iterados ++;
     return true;
 }
 
 const char* hash_iter_ver_actual(const hash_iter_t *iter){
-        
-    return ((campo_hash_t*)(lista_iter_ver_actual(iter->lista_iter)))->clave;        // no estaria devolviendo todo el campo aca?
+    if(hash_iter_al_final(iter))return NULL;
+    return ((campo_hash_t*)(lista_iter_ver_actual(iter->lista_iter)))->clave;    
+    
 }
 
 
 bool hash_iter_al_final(const hash_iter_t *iter){
-    return (iter->cont == iter->hash->tam);
+    return (iter->iterados > iter->hash->cantidad);
 }
 
 
