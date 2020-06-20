@@ -87,9 +87,9 @@ campo_hash_t* crear_campo (char* clave, void* dato){
     return campo;
 }
 
-void destruir_campo (campo_hash_t* campo){
-    free(campo->clave); 
-    free(campo);                            
+void destruir_campo (void* campo){
+    free(((campo_hash_t*)campo)->clave); 
+    free((campo_hash_t*)campo);                            
 }
 
 
@@ -128,37 +128,64 @@ hash_t* hash_crear(hash_destruir_dato_t destruir_dato){
 	hash->destruir_dato = destruir_dato;
 	return hash;
 }
-/*
-bool hash_redimensionar(hash_t* hash){ // no puede ser un const porque se modifica
+
+
+void destruir_tabla(lista_t** tabla,size_t k){
+    for (size_t i = 0;i < k;i++){
+        lista_destruir(tabla[i],destruir_campo);
+    }
+    free(tabla);
+}
+
+bool hash_redimensionar(hash_t* hash){ 
     size_t factor_carga = hash->cantidad / hash->tam;
-    if(factor_carga < 3 && factor_carga > 2 && hash->tam > TAMANIO_INICIAL) return true; // tiene que tener un tamaniom minimo
-    size_t nuevo_tam;
-    if(factor_carga > 3) nuevo_tam = hash->tam * CONSTANTE_DE_REDIMENSION;
+    if(factor_carga == 2 || (factor_carga < 2 && hash->tam == TAMANIO_INICIAL)) return true; //
+    size_t nuevo_tam = 0;
+    if(factor_carga >= 3) nuevo_tam = hash->tam * CONSTANTE_DE_REDIMENSION;
     if(factor_carga < 2) nuevo_tam = hash->tam / CONSTANTE_DE_REDIMENSION;
     lista_t** nueva_tabla = malloc(sizeof(lista_t*)*nuevo_tam);
     if(!nueva_tabla) return NULL;
+           
     for (size_t i = 0; i < nuevo_tam; i++){
         nueva_tabla[i] = lista_crear();
-        if (!nueva_tabla[i]) return false; // aca habria que destruir la memoria de nueva tabla y las otras listas
+        if (!nueva_tabla[i]){
+            destruir_tabla(nueva_tabla,i);
+            return false;
+        }  
     }
     hash_iter_t* iter = hash_iter_crear(hash);
-    if(!iter) return NULL;                    // aca tambien, creo que podriamos usar una funcion auxiliar
-    while(!hash_iter_al_final(iter)){
+    if(!iter){
+        destruir_tabla(nueva_tabla,nuevo_tam);
+        return false;
+    }                     
+    while(!hash_iter_al_final(iter)){ 
         const char* clave = (hash_iter_ver_actual(iter));
+        char* copia_clave = malloc(sizeof(char)*(strlen(clave)+1));
+        if (!copia_clave) {
+            destruir_tabla(nueva_tabla,nuevo_tam);
+            return false;
+        }
+        strcpy(copia_clave,clave);
         void* dato = hash_obtener(hash,clave);
-        campo_hash_t* nuevo_campo = crear_campo(clave, dato);
-        if (!nuevo_campo) return false;       // aca tambien
-        size_t i  = SuperFastHash( clave, strlen(clave)) % nuevo_tam;
-        if(!lista_insertar_primero(nueva_tabla[i],nuevo_campo)); //aca lamentablemente tambien
-        hash_borrar(hash, clave);
+        campo_hash_t* nuevo_campo = crear_campo(copia_clave, dato);
+        if (!nuevo_campo){
+            destruir_tabla(nueva_tabla,nuevo_tam);
+            return false;
+        }
+        size_t i  = SuperFastHash(clave, strlen(clave)) % nuevo_tam;
+        if(!lista_insertar_primero(nueva_tabla[i],nuevo_campo)){
+            destruir_tabla(nueva_tabla,nuevo_tam);
+            return false;    
+        }
         hash_iter_avanzar(iter);
     }
     hash_iter_destruir(iter);
+    destruir_tabla(hash->lista,hash->tam);
     hash->lista = nueva_tabla;
     hash->tam = nuevo_tam;
     return true;
 }
-*/
+
 
 
 bool comparar_claves (const char* clave1, const char* clave2){
@@ -194,7 +221,7 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
         return false;
     } 
     hash->cantidad ++; 
-//    hash_redimensionar(hash);
+    if(!hash_redimensionar(hash)) return false;
     return true;
 }
 
@@ -209,14 +236,14 @@ void* hash_borrar(hash_t *hash, const char *clave){
             if(hash->destruir_dato){ 
                 hash->destruir_dato(((campo_hash_t*)(lista_iter_ver_actual(iter)))->dato);
             }
-            destruir_campo((campo_hash_t*)(lista_iter_ver_actual(iter)));        
+            destruir_campo((lista_iter_ver_actual(iter)));        
             lista_iter_borrar(iter); 
             hash->cantidad --;
         }
         lista_iter_avanzar(iter); 
     }    
     lista_iter_destruir(iter);
-//    hash_redimensionar(hash);
+    if(!hash_redimensionar(hash)) return false;
     return dato;
 }
 
@@ -260,7 +287,7 @@ void hash_destruir(hash_t *hash){
             if (hash->destruir_dato){ 
                 hash->destruir_dato(((campo_hash_t*)lista_ver_primero(hash->lista[i]))->dato);                
             }
-            destruir_campo((campo_hash_t*)(lista_borrar_primero(hash->lista[i])));
+            destruir_campo((lista_borrar_primero(hash->lista[i])));
         }
         lista_destruir(hash->lista[i],NULL);
     }
